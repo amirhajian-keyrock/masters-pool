@@ -24,9 +24,10 @@ def get_gspread_client():
     creds_json = os.environ.get('GOOGLE_CREDENTIALS')
     if creds_json:
         # Running in CI/GitHub Actions - write temp file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        tmp_path = os.path.join(tempfile.gettempdir(), 'gcp_creds.json')
+        with open(tmp_path, 'w') as f:
             f.write(creds_json)
-            return gspread.service_account(filename=f.name)
+        return gspread.service_account(filename=tmp_path)
     else:
         # Running locally
         return gspread.service_account(filename=CREDS_FILE)
