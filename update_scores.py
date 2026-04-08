@@ -65,12 +65,28 @@ FINISH_RANGES = [
     (11, 15, 6), (16, 20, 5), (21, 25, 4), (26, 30, 3), (31, 40, 2), (41, 50, 1),
 ]
 
+# Augusta National par layout (Masters) - used to calculate score-to-par from strokes
+# since ESPN scoreType data can be unreliable for the Masters
+AUGUSTA_PAR = {
+    1: 4, 2: 5, 3: 4, 4: 3, 5: 4, 6: 3, 7: 4, 8: 5, 9: 4,
+    10: 4, 11: 4, 12: 3, 13: 5, 14: 4, 15: 5, 16: 3, 17: 4, 18: 4,
+}
 
-def parse_score_to_par(score_type_str):
-    """Convert ESPN scoreType displayValue to integer score-to-par."""
+
+def get_score_to_par(hole_num, strokes, score_type_str, course_par=None):
+    """
+    Calculate score-to-par. Prefer course par + strokes over ESPN scoreType
+    since ESPN scoreType can be wrong for the Masters.
+    """
+    if course_par and hole_num in course_par and strokes is not None:
+        return int(strokes) - course_par[hole_num]
+    # Fallback to ESPN scoreType
     if score_type_str == "E":
         return 0
-    return int(score_type_str)
+    try:
+        return int(score_type_str)
+    except (ValueError, TypeError):
+        return 0
 
 
 def hole_points(score_to_par):
@@ -169,12 +185,18 @@ def fetch_espn_data(event_id=None):
         return json.loads(resp.read().decode())
 
 
-def parse_players(espn_data):
+def parse_players(espn_data, course_par=None):
     """Parse ESPN data into our player structure."""
     comps = espn_data.get('competitions', [])
     if not comps:
         print("No competition data found. Tournament may not have started.")
         return {}
+
+    # Auto-detect Masters and use Augusta par
+    event_name = espn_data.get('name', '')
+    if 'masters' in event_name.lower() and course_par is None:
+        course_par = AUGUSTA_PAR
+        print("Using Augusta National par layout for Masters scoring.")
 
     competitors = comps[0].get('competitors', [])
     players = {}
@@ -209,11 +231,12 @@ def parse_players(espn_data):
             for hole in holes:
                 score_type = hole.get('scoreType', {}).get('displayValue')
                 strokes = hole.get('value')
-                if score_type is None or strokes is None:
+                if strokes is None:
                     continue
 
-                score_to_par = parse_score_to_par(score_type)
+                hole_num = hole.get('period', 0)
                 strokes = int(strokes)
+                score_to_par = get_score_to_par(hole_num, strokes, score_type, course_par)
                 pts = hole_points(score_to_par)
                 round_hole_pts += pts
 
