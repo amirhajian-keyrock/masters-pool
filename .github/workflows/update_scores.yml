@@ -2,9 +2,9 @@ name: Update Masters Scores
 
 on:
   schedule:
-    # Every 15 minutes during Masters tournament hours (Apr 9-13)
+    # Every 5 minutes during Masters tournament hours (Apr 9-13)
     # 7am-8pm ET = 11:00-00:00 UTC (hours 11-23)
-    - cron: '*/15 11-23 9-13 4 *'
+    - cron: '*/5 11-23 9-13 4 *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
