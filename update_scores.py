@@ -98,6 +98,29 @@ def hole_points(score_to_par):
     return HOLE_SCORES[score_to_par]
 
 
+def compute_thru(linescores):
+    """
+    Compute the 'thru' display string for a player based on their linescores.
+    - Picks the latest round with any data (stroke value or hole list).
+    - Returns 'F' if that round has 18+ holes, the hole count if in progress,
+      or '-' if the player hasn't started any round yet.
+    """
+    if not linescores:
+        return '-'
+    current = None
+    for r in linescores:
+        if r.get('value') is not None or r.get('linescores'):
+            current = r
+    if current is None:
+        return '-'
+    n = len(current.get('linescores', []))
+    if n == 0:
+        return '-'
+    if n >= 18:
+        return 'F'
+    return str(n)
+
+
 def is_birdie_or_better(score_to_par):
     return score_to_par <= -1
 
@@ -208,6 +231,7 @@ def parse_players(espn_data, course_par=None):
         player = {
             'name': name,
             'espn_score': comp.get('score', ''),
+            'thru': compute_thru(linescores),
             'rounds_completed': 0,
             'rounds': [],
             'total_hole_pts': 0,
@@ -380,18 +404,21 @@ def update_google_sheet(players, name_lookup):
             player = players[espn_name]
             dk_pts = player['total_dk_pts']
             score = player.get('espn_score', '')
+            thru = player.get('thru', '-')
 
             # Column C = +/- (row is 1-indexed in sheets)
             sheet_row = row_idx + 1
             updates.append({'range': f'C{sheet_row}', 'values': [[score]]})
             # Column D = Player Total (DK points)
             updates.append({'range': f'D{sheet_row}', 'values': [[dk_pts]]})
+            # Column E = Thru (hole count, 'F', or '-')
+            updates.append({'range': f'E{sheet_row}', 'values': [[thru]]})
         elif golfer_name and golfer_name not in ['Entrant', 'Golfers']:
             unmatched.append(golfer_name)
 
     if updates:
         ws.batch_update(updates, raw=False)
-        print(f"Updated {len(updates) // 2} golfer scores in Google Sheet.")
+        print(f"Updated {len(updates) // 3} golfer scores in Google Sheet.")
 
     if unmatched:
         print(f"\nCould not match these golfers to ESPN data:")
