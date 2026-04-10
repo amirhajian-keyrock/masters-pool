@@ -169,30 +169,42 @@ def get_finish_points(position):
     return 0
 
 
+def parse_score_to_par(score_str):
+    """Parse ESPN score-to-par string (e.g. '-5', '+2', 'E') to int."""
+    if not score_str:
+        return None
+    if score_str == 'E':
+        return 0
+    try:
+        return int(score_str)
+    except (ValueError, TypeError):
+        return None
+
+
 def calculate_finish_positions(players_data):
     """
-    Calculate finish positions handling ties per DK rules:
+    Calculate finish positions based on current standings, handling ties per DK rules.
+    Uses ESPN score-to-par so positions update live during the tournament.
     Ties don't reduce points - all tied players get the same position's points.
     """
-    # Only players who completed all 4 rounds and didn't WD/DQ get finish position
-    finishers = []
+    scorers = []
     for name, data in players_data.items():
-        if data['rounds_completed'] == 4 and not data.get('withdrawn'):
-            total_strokes = sum(r['strokes'] for r in data['rounds'])
-            finishers.append((total_strokes, name))
+        if data.get('withdrawn') or data.get('cut'):
+            continue
+        score_val = parse_score_to_par(data.get('espn_score', ''))
+        if score_val is not None:
+            scorers.append((score_val, name))
 
-    finishers.sort()
+    scorers.sort()
 
     positions = {}
     i = 0
-    while i < len(finishers):
-        # Find all players tied at this stroke total
-        current_strokes = finishers[i][0]
+    while i < len(scorers):
+        current_score = scorers[i][0]
         tied = []
-        while i < len(finishers) and finishers[i][0] == current_strokes:
-            tied.append(finishers[i][1])
+        while i < len(scorers) and scorers[i][0] == current_score:
+            tied.append(scorers[i][1])
             i += 1
-        # Position is rank (1-indexed)
         pos = i - len(tied) + 1
         for name in tied:
             positions[name] = pos
