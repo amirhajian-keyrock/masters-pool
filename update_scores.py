@@ -240,10 +240,19 @@ def parse_players(espn_data, course_par=None):
         name = comp['athlete']['fullName']
         linescores = comp.get('linescores', [])
 
+        # Extract per-round score-to-par display values (e.g. "-5", "+2", "E")
+        round_scores = {}
+        for r in linescores:
+            period = r.get('period', 0)
+            display = r.get('displayValue', '')
+            if display and display != '-':
+                round_scores[period] = display
+
         player = {
             'name': name,
             'espn_score': comp.get('score', ''),
             'thru': compute_thru(linescores),
+            'round_scores': round_scores,
             'rounds_completed': 0,
             'rounds': [],
             'total_hole_pts': 0,
@@ -421,16 +430,21 @@ def update_google_sheet(players, name_lookup):
             # Column C = +/- (row is 1-indexed in sheets)
             sheet_row = row_idx + 1
             updates.append({'range': f'C{sheet_row}', 'values': [[score]]})
-            # Column D = Player Total (DK points)
-            updates.append({'range': f'D{sheet_row}', 'values': [[dk_pts]]})
-            # Column E = Thru (hole count, 'F', or '-')
-            updates.append({'range': f'E{sheet_row}', 'values': [[thru]]})
+            # Columns D-G = R1, R2, R3, R4
+            round_scores = player.get('round_scores', {})
+            for r_num, col in [(1, 'D'), (2, 'E'), (3, 'F'), (4, 'G')]:
+                r_score = round_scores.get(r_num, '')
+                updates.append({'range': f'{col}{sheet_row}', 'values': [[r_score]]})
+            # Column H = Player Total (DK points)
+            updates.append({'range': f'H{sheet_row}', 'values': [[dk_pts]]})
+            # Column I = Thru (hole count, 'F', or '-')
+            updates.append({'range': f'I{sheet_row}', 'values': [[thru]]})
         elif golfer_name and golfer_name not in ['Entrant', 'Golfers']:
             unmatched.append(golfer_name)
 
     if updates:
-        ws.batch_update(updates, raw=False)
-        print(f"Updated {len(updates) // 3} golfer scores in Google Sheet.")
+        ws.batch_update(updates, value_input_option='RAW')
+        print(f"Updated {len(updates) // 7} golfer scores in Google Sheet.")
 
     if unmatched:
         print(f"\nCould not match these golfers to ESPN data:")
